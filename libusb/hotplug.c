@@ -173,7 +173,7 @@ static void usbi_recursively_remove_parents(struct libusb_device *dev, struct li
 			 * equal to next_dev given we know at this point that it was
 			 * previously seen in the list. */
 			assert (dev->parent_dev != next_dev);
-			if(dev->parent_dev->list.next && dev->parent_dev->list.prev) {
+			if (dev->parent_dev->list.next && dev->parent_dev->list.prev) {
 				list_del(&dev->parent_dev->list);
 			}
 		}
