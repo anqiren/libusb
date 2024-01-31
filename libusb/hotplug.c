@@ -166,12 +166,12 @@ static void usbi_recursively_remove_parents(struct libusb_device *dev, struct li
 	if (dev && dev->parent_dev) {
 		if (usbi_atomic_load(&dev->parent_dev->refcnt) == 1) {
 			/* the parent was processed before this device in the list
-			 * and therefore has its own ref count already decrement.
-			 * The only remaining ref counting comes from its remaining single child.
+			 * and therefore has its ref count already decrement for its own ref.
+			 * The only remaining counted ref come from its remaining single child.
 			 * It will thus be released when its child will be released.
-			   We remove it from the list. This is safe as parent_dev can not be
-			   equal to next_dev given we know at this point that it was
-			   previously seen in the list. */
+			 * We remove it from the list. This is safe as parent_dev can not be
+			 * equal to next_dev given we know at this point that it was
+			 * previously seen in the list. */
 			assert (dev->parent_dev != next_dev);
 			list_del(&dev->parent_dev->list);
 		}
@@ -213,6 +213,7 @@ void usbi_hotplug_exit(struct libusb_context *ctx)
 	}
 
 	/* free all discovered devices. due to parent references loop until no devices are freed. */
+	usbi_mutex_lock(&ctx->usb_devs_lock); /* hotplug thread might still be processing an already triggered event, possibly accessing this list as well */
 	for_each_device_safe(ctx, dev, next_dev) {
 		/* remove the device from the usb_devs list only if there are no
 		 * references held, otherwise leave it on the list so that a
@@ -225,6 +226,7 @@ void usbi_hotplug_exit(struct libusb_context *ctx)
 		
 		libusb_unref_device(dev);
 	}
+	usbi_mutex_unlock(&ctx->usb_devs_lock);
 
 	usbi_mutex_destroy(&ctx->hotplug_cbs_lock);
 }
