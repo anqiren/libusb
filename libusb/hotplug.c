@@ -19,6 +19,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include <stdio.h>
+
 #include "libusbi.h"
 
 /**
@@ -173,7 +175,14 @@ static void usbi_recursively_remove_parents(struct libusb_device *dev, struct li
 			 * equal to next_dev given we know at this point that it was
 			 * previously seen in the list. */
 			assert (dev->parent_dev != next_dev);
-			list_del(&dev->parent_dev->list);
+			if(dev->parent_dev->list.next && dev->parent_dev->list.prev) {
+				list_del(&dev->parent_dev->list);
+				fprintf(stderr, "removed parent (%p) %d.%d = %d ; parent=(%p)\n",
+				dev->parent_dev, dev->parent_dev->bus_number, dev->parent_dev->device_address, dev->parent_dev->refcnt, dev->parent_dev->parent_dev);
+			}
+			else {
+				fprintf(stderr, "Unexpected dangling list head for parent %d.%d\n", dev->parent_dev->bus_number, dev->parent_dev->device_address);
+			}
 		}
 
 		usbi_recursively_remove_parents(dev->parent_dev, next_dev);
@@ -214,17 +223,32 @@ void usbi_hotplug_exit(struct libusb_context *ctx)
 
 	/* free all discovered devices. due to parent references loop until no devices are freed. */
 	usbi_mutex_lock(&ctx->usb_devs_lock); /* hotplug thread might still be processing an already triggered event, possibly accessing this list as well */
+
+	fprintf(stderr, "device list begin\n");
+	for_each_device(ctx, dev) {
+		fprintf(stderr, "(%p) %d.%d = %d ; parent=(%p)\n",
+			dev, dev->bus_number, dev->device_address, dev->refcnt, dev->parent_dev);
+	}
+	fprintf(stderr, "device list end\n");
+
 	for_each_device_safe(ctx, dev, next_dev) {
 		/* remove the device from the usb_devs list only if there are no
 		 * references held, otherwise leave it on the list so that a
 		 * warning message will be shown */
 		if (usbi_atomic_load(&dev->refcnt) == 1) {
 			list_del(&dev->list);
+			fprintf(stderr, "removed (%p) %d.%d = %d ; parent=(%p)\n",
+				dev, dev->bus_number, dev->device_address, dev->refcnt, dev->parent_dev);
 		}
 		
 		usbi_recursively_remove_parents(dev, next_dev);
-		
+
+		fprintf(stderr, "will unref (%p) %d.%d = %d ; parent=(%p)\n",
+				dev, dev->bus_number, dev->device_address, dev->refcnt, dev->parent_dev);
+
 		libusb_unref_device(dev);
+
+		fprintf(stderr, "\n");
 	}
 	usbi_mutex_unlock(&ctx->usb_devs_lock);
 

@@ -1317,6 +1317,7 @@ void API_EXPORTED libusb_unref_device(libusb_device *dev)
 		}
 
 		free(dev);
+		fprintf(stderr,"freed: (%p)\n", dev);
 	}
 }
 
